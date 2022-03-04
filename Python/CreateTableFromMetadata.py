@@ -79,7 +79,7 @@ def CreateStatement(TableName):
 #Generate SQL "CREATE" Script To File
 def CreateFile(FileName, CreateTable):
     try:
-        f = open(FileName, "w")
+        f = open("SQL/"+FileName, "w")
         f.write(CreateTable)
 
     except:
@@ -102,7 +102,7 @@ def CreateNotExstFile(FileName, CreateTable, TableName):
     try:
         NotExst = "IF (OBJECT_ID('"+TableName+"') is null) \n"
         NotExstStatement = NotExst + CreateTable
-        f = open(FileName, "w")
+        f = open("SQL/"+FileName, "w")
         f.write(NotExstStatement)
 
     except:
@@ -123,7 +123,7 @@ def DropNCreateFile(FileName, CreateTable, TableName):
     try:
         Drop = "IF (OBJECT_ID('"+TableName+"') is not null DROP TABLE "+TableName+" \n"
         DropStatement = Drop + CreateTable
-        f = open(FileName, "w")
+        f = open("SQL/"+FileName, "w")
         f.write(DropStatement)
 
     except:
@@ -144,7 +144,7 @@ def TrunOrCreateFile(FileName, CreateTable, TableName):
     try:
         Trun = "IF (OBJECT_ID('"+TableName+"') is not null) TRUNCATE TABLE "+TableName+" \nIF OBJECT_ID('"+TableName+"') is null) \n"
         TrunStatement = Trun + CreateTable
-        f = open(FileName, "w")
+        f = open("SQL/"+FileName, "w")
         f.write(TrunStatement)
 
     except:

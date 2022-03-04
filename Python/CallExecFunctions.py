@@ -28,7 +28,7 @@ SQLStatement3 = BF.CreateViewStatement("View3", Dictionary3, "table3")
 
 #Create File and Write The Statements In The File
 SQLStatement = SQLStatement1+";\n"+SQLStatement2+";\n"+SQLStatement3+";\n"
-BF.CreateFile("SQLFile.sql", SQLStatement)
+BF.CreateFile("SQL\SQLFile.sql", SQLStatement)
 
 
 #Open And Read "SQLFile" Into SQL_String
