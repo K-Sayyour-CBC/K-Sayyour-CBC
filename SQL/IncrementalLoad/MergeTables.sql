@@ -1,5 +1,5 @@
 MERGE CDCTarget AS Target
-USING CDCProcessed AS Source
+USING CDCProcessing AS Source
 ON Source.ProductID = Target.ProductID
 WHEN NOT MATCHED BY Target THEN
   INSERT (ProductID, ProductName, Category, Color)

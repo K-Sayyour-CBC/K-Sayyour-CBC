@@ -157,3 +157,7 @@ History = list(dict.fromkeys(History))"""
     History = list(dict.fromkeys(History))"""
 
         
+Data = ["SEQ", "ProductID", "ProductName", "Category", "Color", "LoadTime", "ProcessingTime"]
+print(Data)
+Data.remove("SEQ")
+print(Data)
