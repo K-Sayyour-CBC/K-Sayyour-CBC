@@ -154,10 +154,107 @@ History = list(dict.fromkeys(History))"""
             for j in range(0, len(Data)):
                 if Data[j][0] > Data[i][0] and Data[j][1] == Data[i][1]:
                     History.append(Data[i])
-    History = list(dict.fromkeys(History))"""
+    History = list(dict.fromkeys(History))
 
+
+
+#Get Table Columns Description With Corresponding Schema From Metadata Table Into A List Of Tuples
+def GetTableDescription(TableName):
+    try:
+        conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM MetaData Where TableName = '"+TableName+"'")
+        Values = cursor.fetchall()
+
+    except:
+        print("Failed To Execute Statement And Get The Columns Descriptions")
+    
+    else:
+        print("Success! The Table "+TableName+" Has The Following Column Descriptions")
+        print(Values)
+        return Values
+    
+    finally:
+        conn.close()
+
+#Create Processing Table
+def CreateProcessing(TableName):
+    try:
+        TableDescription = GetTableDescription(TableName)
+        Statement = "CREATE TABLE CDCProcessing"+TableName+"\n(SEQ int NOT NULL\n,"
+        col1 = (list(zip(*TableDescription))[1])
+        col2 = (list(zip(*TableDescription))[2])
+        col3 = (list(zip(*TableDescription))[3])
+        col4 = (list(zip(*TableDescription))[4])
+        print("The Columns Are:")
+        print(col1, col2, col3, col4)
+        j = 0
+        col1 = list(col1)
+        col2 = list(col2)
+        col3 = list(col3)
+        col4 = list(col4)
+        while j < len(col1):
+            if col3[j] == None:
+                col3[j] = ""
+                
+            
+            else:
+                col3[j] = "("+str(col3[j])+")"
+
+            if col4[j] == True:
+                col4[j] = "primary key"
+
+            else:
+                col4[j] = "not null"   
+            Statement = Statement+str(col1[j])+" "+str(col2[j])+" "+str(col3[j])+" "+str(col4[j])+"\n,"
+            j = j + 1
+        Statement = Statement+"LoadTime datetime\n,ProcessingTime datetime default getdate()\n);"
         
-Data = ["SEQ", "ProductID", "ProductName", "Category", "Color", "LoadTime", "ProcessingTime"]
-print(Data)
-Data.remove("SEQ")
-print(Data)
+    except:
+        print("Failed To Create Table Processing")
+    
+    else:
+        print("SUCCESS!")
+        return Statement
+
+
+#Create History Table
+def CreateHistory(TableName):
+    try:
+        TableDescription = GetTableDescription(TableName)
+        Statement = "CREATE TABLE CDCHistory"+TableName+"\n(SEQ int NOT NULL\n,"
+        col1 = (list(zip(*TableDescription))[1])
+        col2 = (list(zip(*TableDescription))[2])
+        col3 = (list(zip(*TableDescription))[3])
+        col4 = (list(zip(*TableDescription))[4])
+        print("The Columns Are:")
+        print(col1, col2, col3, col4)
+        j = 0
+        col1 = list(col1)
+        col2 = list(col2)
+        col3 = list(col3)
+        col4 = list(col4)
+        while j < len(col1):
+            if col3[j] == None:
+                col3[j] = ""
+                
+            
+            else:
+                col3[j] = "("+str(col3[j])+")"
+
+            if col4[j] == True:
+                col4[j] = "primary key"
+
+            else:
+                col4[j] = "not null"   
+            Statement = Statement+str(col1[j])+" "+str(col2[j])+" "+str(col3[j])+" "+str(col4[j])+"\n,"
+            j = j + 1
+        Statement = Statement+"LoadTime datetime\n,ProcessingTime datetime \n);"
+        
+    except:
+        print("Failed To Create Table Processing")
+    
+    else:
+        print("SUCCESS!")
+        return Statement"""
+

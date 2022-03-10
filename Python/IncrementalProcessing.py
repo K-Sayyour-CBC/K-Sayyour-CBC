@@ -52,6 +52,9 @@ def GetData(TableName):
         print("Success! The Data Of "+TableName+" Is: ")
         print(Values)
         return Values
+    
+    finally:
+        conn.close()
 #Sort Data Based On The # Given Key Columns
 def SortData(TableName, FirstKey, SecondKey, ThirdKey):
     try:
@@ -213,86 +216,92 @@ def StartTransaction(ProcessingTable):
 
 #Move Data With Least Time Stamp From The Specified FromTable Into The Specified IntoTable
 
-def LeastTimeTransaction(StagingTable, ProcessingTable):
+def LeastTimeTransaction(TableName):
     
-    IntoSchema = GetSchema(ProcessingTable)
+    IntoSchema = GetSchema("CDCProcessing"+TableName)
     IntoSchema.pop(-1)
-    SQLStatement = "INSERT INTO "+ProcessingTable+" ("
+    SQLStatement = "BEGIN TRANSACTION;\nINSERT INTO "+"CDCProcessing"+TableName+" ("
     for i in IntoSchema:
         SQLStatement = SQLStatement+i+", "
     SQLStatement = SQLStatement[:-2:]
-    SQLStatement = SQLStatement+")\nSELECT * FROM "+StagingTable+"\nWHERE LoadTime = (SELECT min(LoadTime) FROM "+StagingTable+");\nDELETE FROM "+StagingTable+"\nWHERE LoadTime = (SELECT min(LoadTime) FROM "+StagingTable+");"
-    try:
+    SQLStatement = SQLStatement+")\nSELECT * FROM "+"CDCStaging"+TableName+"\nWHERE LoadTime = (SELECT min(LoadTime) FROM "+"CDCStaging"+TableName+");\nDELETE FROM "+"CDCStaging"+TableName+"\nWHERE LoadTime = (SELECT min(LoadTime) FROM "+"CDCStaging"+TableName+");\nCOMMIT TRANSACTION;\n"
+    return SQLStatement
+ 
+    """try:
         CreateFile("SQL\IncrementalLoad\LeastTimeTransact.sql", SQLStatement)
-        #conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')
-        #cursor = conn.cursor()
-        #cursor.execute(SQLStatement)
-        #conn.commit()
+        conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')
+        cursor = conn.cursor()
+        cursor.execute(SQLStatement)
+        conn.commit()
     except:
-        #conn.rollback()
+        conn.rollback()
         print("Failed To Do Transaction From "+StagingTable+" Into "+ProcessingTable)
     else:
         print("Success!")
         print("Transaction From "+StagingTable+" Into "+ProcessingTable+" Was Completed")
-    #finally:
-        #conn.close()
+    finally:
+        conn.close()"""
 
 
 #Move Unwanted Data To CDCHistory
-def LoadToHistory(ProcessingTable, HistoryTable):
-    ProcessingSchema = GetSchema(ProcessingTable)
-    SQLStatement = "INSERT INTO "+HistoryTable+" ("
+def LoadToHistory(TableName, KeyColumn):
+    ProcessingSchema = GetSchema("CDCProcessing"+TableName)
+    SQLStatement = "BEGIN TRANSACTION;\nINSERT INTO "+"CDCHistory"+TableName+" ("
     for i in ProcessingSchema:
         SQLStatement = SQLStatement+i+", "
     SQLStatement = SQLStatement[:-2:]
-    SQLStatement = SQLStatement+")\nSELECT * FROM "+ProcessingTable+"\nEXCEPT\nSELECT Q.MAXSEQ AS SEQ, "
+    SQLStatement = SQLStatement+")\nSELECT * FROM "+"CDCProcessing"+TableName+"\nEXCEPT\nSELECT Q.MAXSEQ AS SEQ, "
     ProcessingSchema.remove("SEQ")
     for i in ProcessingSchema:
         SQLStatement = SQLStatement+"P."+i+", "
     SQLStatement = SQLStatement[:-2:]
-    SQLStatement = SQLStatement+"\nFROM "+ProcessingTable+" AS P INNER JOIN (SELECT MAX(SEQ) AS MAXSEQ, ProductID AS QProductID FROM "+ProcessingTable+" GROUP BY ProductID) AS Q\nON Q.MAXSEQ = P.SEQ AND QProductID = P.ProductID\nDELETE "+ProcessingTable+"\nFROM "+ProcessingTable+"\nINNER JOIN "+HistoryTable+" ON "+ProcessingTable+".ProductID = "+HistoryTable+".ProductID AND "+ProcessingTable+".SEQ = "+HistoryTable+".SEQ"
-    try:
+    SQLStatement = SQLStatement+"\nFROM "+"CDCProcessing"+TableName+" AS P INNER JOIN (SELECT MAX(SEQ) AS MAXSEQ, "+KeyColumn+" AS Q"+KeyColumn+" FROM "+"CDCProcessing"+TableName+" GROUP BY "+KeyColumn+") AS Q\nON Q.MAXSEQ = P.SEQ AND Q"+KeyColumn+" = P."+KeyColumn+"\nDELETE "+"CDCProcessing"+TableName+"\nFROM "+"CDCProcessing"+TableName+"\nINNER JOIN "+"CDCHistory"+TableName+" ON "+"CDCProcessing"+TableName+"."+KeyColumn+" = "+"CDCHistory"+TableName+"."+KeyColumn+" AND "+"CDCProcessing"+TableName+".SEQ = "+"CDCHistory"+TableName+".SEQ\nCOMMIT TRANSACTION;\n"
+    return SQLStatement
+    
+    """try:
         CreateFile("SQL\IncrementalLoad\LoadToHistory.sql", SQLStatement)
-        #conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')
-        #cursor = conn.cursor()
-        #cursor.execute(SQLStatement)
-        #conn.commit()
+        conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')
+        cursor = conn.cursor()
+        cursor.execute(SQLStatement)
+        conn.commit()
     except:
-        #conn.rollback()
+        conn.rollback()
         print("Failed To Do Transaction From "+ProcessingTable+" Into "+HistoryTable)
     else:
         print("Success!")
         print("Transaction From "+ProcessingTable+" Into "+HistoryTable+" Was Completed")
-    #finally:
-        #conn.close()
+    finally:
+        conn.close()"""
 
 
 #Merge The Processing Table(SOURCE) With The Target Table(TARGET)
-def MergeTables(SourceTable, TargetTable, KeyColumn):
-    try:
-        TargetSchema = GetSchema(TargetTable)
-        #MergeStatement
-        MergeStatement = "MERGE "+TargetTable+" AS Target\nUSING "+SourceTable+" AS Source\nON Source."+KeyColumn+" = Target."+KeyColumn+"\nWHEN NOT MATCHED BY Target THEN\n  INSERT ("
-        for i in TargetSchema:
-            MergeStatement = MergeStatement+i+", "
-        MergeStatement = MergeStatement[:-2:]
-        MergeStatement = MergeStatement+")\n  VALUES ("
-        for i in TargetSchema:
-            MergeStatement = MergeStatement+"Source."+i+", "
-        MergeStatement = MergeStatement[:-2:]
-        MergeStatement = MergeStatement+")\nWHEN MATCHED THEN\nUPDATE\nSET\n  "
-        for i in TargetSchema:
-            MergeStatement = MergeStatement+"Target."+i+" = Source."+i+",\n  "
-        MergeStatement = MergeStatement[:-4:]
-        MergeStatement = MergeStatement+";"
-        
+def MergeTables(TableName, KeyColumn):
+    
+    TargetSchema = GetSchema("CDCTarget"+TableName)
+    #MergeStatement
+    MergeStatement = "MERGE "+"CDCTarget"+TableName+" AS Target\nUSING "+"CDCProcessing"+TableName+" AS Source\nON Source."+KeyColumn+" = Target."+KeyColumn+"\nWHEN NOT MATCHED BY Target THEN\n  INSERT ("
+    for i in TargetSchema:
+        MergeStatement = MergeStatement+i+", "
+    MergeStatement = MergeStatement[:-2:]
+    MergeStatement = MergeStatement+")\n  VALUES ("
+    for i in TargetSchema:
+        MergeStatement = MergeStatement+"Source."+i+", "
+    MergeStatement = MergeStatement[:-2:]
+    MergeStatement = MergeStatement+")\nWHEN MATCHED THEN\nUPDATE\nSET\n  "
+    for i in TargetSchema:
+        MergeStatement = MergeStatement+"Target."+i+" = Source."+i+",\n  "
+    MergeStatement = MergeStatement[:-4:]
+    MergeStatement = MergeStatement+";\n  COMMIT TRANSACTION;\n  "
+    return MergeStatement
+    """try:    
         CreateFile("SQL\IncrementalLoad\MergeTables.sql", MergeStatement)
-        #conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')  
-        #cursor = conn.cursor()
-        #cursor.execute(MergeStatement)
-        #conn.commit()
+        conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')  
+        cursor = conn.cursor()
+        cursor.execute(MergeStatement)
+        conn.commit()
 
     except:
+        conn.rollback()
         print("Failed To Execute The Statement:")
         print(MergeStatement)
     
@@ -301,35 +310,37 @@ def MergeTables(SourceTable, TargetTable, KeyColumn):
         print(MergeStatement)
         print("Was Successfuly Executed On the Data Base For Tables "+SourceTable+" And "+TargetTable)
 
-    #finally:
-        #conn.close()
+    finally:
+        conn.close()"""
 
 #Move The Remaining Data In Processing To History
-def MoveToHistory(ProcessingTable, HistoryTable):
-    HistorySchema = GetSchema(ProcessingTable)
-    SQLStatement = "INSERT INTO "+HistoryTable+" ("
+def MoveToHistory(TableName):
+    HistorySchema = GetSchema("CDCProcessing"+TableName)
+    SQLStatement = "BEGIN TRANSACTION;\nINSERT INTO "+"CDCHistory"+TableName+" ("
     for i in HistorySchema:
         SQLStatement = SQLStatement+i+", "
     SQLStatement = SQLStatement[:-2:]
-    SQLStatement = SQLStatement+")\nSELECT * FROM "+ProcessingTable+"\nDELETE FROM "+ProcessingTable
-    try:
+    SQLStatement = SQLStatement+")\nSELECT * FROM "+"CDCProcessing"+TableName+"\nDELETE FROM "+"CDCProcessing"+TableName+"\nCOMMIT TRANSACTION;\n  "
+    return SQLStatement
+    
+    """try:
         CreateFile("SQL\IncrementalLoad\MoveToHistory.sql", SQLStatement)
-        #conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')
-        #cursor = conn.cursor()
-        #cursor.execute(SQLStatement)
-        #conn.commit()
+        conn = pyodbc.connect('DRIVER={SQL Server Native Client 11.0};SERVER=DESKTOP-60R3M68\LOCALHOST;DATABASE=IncrementalProcessing;Trusted_Connection=yes;')
+        cursor = conn.cursor()
+        cursor.execute(SQLStatement)
+        conn.commit()
     except:
-        #conn.rollback()
+        conn.rollback()
         print("Failed To Do Transaction From "+ProcessingTable+" Into "+HistoryTable)
     else:
         print("Success!")
         print("Transaction From "+ProcessingTable+" Into "+HistoryTable+" Was Completed")
-    #finally:
-        #conn.close()
+    finally:
+        conn.close()"""
 
 
 #Do The Transaction From Staging Table To Processing Table And Then To Target And History
-def ProcessingTransact(StagingTable, ProcessingTable, HistoryTable, TargetTable, KeyColumn):
+"""def ProcessingTransact(StagingTable, ProcessingTable, HistoryTable, TargetTable, KeyColumn):
     try:
         LeastTimeTransaction(StagingTable, ProcessingTable)
         LoadToHistory(ProcessingTable, HistoryTable)
@@ -339,14 +350,14 @@ def ProcessingTransact(StagingTable, ProcessingTable, HistoryTable, TargetTable,
         print("Failed To Do Tarnsation")
     else:
         print("Success!")
-        print("Taransaction Completed")
+        print("Taransaction Completed")"""
 
 
-LeastTimeTransaction("CDCStaging", "CDCProcessing")
-LoadToHistory("CDCProcessing", "CDCHistory")
-MergeTables("CDCProcessing", "CDCTarget", "ProductID")
-MoveToHistory("CDCProcessing", "CDCHistory")
-#ProcessingTransact("CDCStaging", "CDCProcessing", "CDCProcessed", "CDCHistory", "CDCTarget", "ProductID")
+#LeastTimeTransaction("CDCStaging", "CDCProcessing")
+#LoadToHistory("CDCProcessing", "CDCHistory")
+#MergeTables("CDCProcessing", "CDCTarget", "ProductID")
+#MoveToHistory("CDCProcessing", "CDCHistory")
+#ProcessingTransact("CDCStaging", "CDCProcessing", "CDCHistory", "CDCTarget", "ProductID")
 
 
 
